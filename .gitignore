@@ -1,0 +1,22 @@
+# Зависимости и сборка
+node_modules/
+dist/
+
+# Локальный сертификат для камеры на телефоне (генерируется npm run cert)
+.certs/
+
+# Логи запуска
+*.log
+
+# База создаётся скриптом npm run seed
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
+
+# Логины и пароли учеников выдаются в школе, в репозиторий не попадают
+server/data/logins.csv
+
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+.vscode/

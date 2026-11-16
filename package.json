@@ -1,0 +1,42 @@
+{
+  "name": "meal-qr-wireframe",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "dev": "vite",
+    "api": "node server/index.js",
+    "seed": "node server/seed.js",
+    "qr": "node scripts/generate-qr.mjs",
+    "dev:all": "concurrently -n api,web -c yellow,green \"node server/index.js\" \"vite --mode https\"",
+    "cert": "node scripts/generate-cert.mjs",
+    "dev:https": "node scripts/generate-cert.mjs && vite --mode https",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "framer-motion": "^14.14.0",
+    "jsonwebtoken": "^9.0.3",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^0.451.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.1.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.7",
+    "node-forge": "^1.4.3",
+    "postcss": "^8.4.47",
+    "qrcode": "^1.5.4",
+    "tailwindcss": "^3.4.13",
+    "vite": "^5.4.8"
+  }
+}
