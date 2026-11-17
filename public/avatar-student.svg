@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Ученик">
+  <defs>
+    <clipPath id="round">
+      <circle cx="48" cy="48" r="48" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <circle cx="48" cy="48" r="48" fill="#E6E6E6" />
+    <circle cx="48" cy="36" r="15" fill="#9E9E9E" />
+    <path d="M48 50c-18 0-28 13-28 30v18h56V80c0-17-10-30-28-30z" fill="#9E9E9E" />
+  </g>
+</svg>

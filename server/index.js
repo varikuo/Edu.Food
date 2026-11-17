@@ -13,11 +13,17 @@ import {
   db,
   portionsBase
 } from './db.js'
-import { seed } from './seed.js'
+import { backfillBakingImages, backfillDishImages, seed, syncDishes } from './seed.js'
 
 // Пустая база (первый запуск на свежем клоне) — заполняем сами,
 // чтобы сервер можно было поднять одной командой
 if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0) seed({ log: () => {} })
+// Блюда, добавленные в каталог позже, досоздаём в существующей базе
+const addedDishes = syncDishes()
+if (addedDishes > 0) console.log(`[api] новых блюд в каталоге: ${addedDishes}`)
+// У блюд и выпечки, добавленных до появления фото, картинки пустые — подставляем
+backfillDishImages()
+backfillBakingImages()
 
 const app = express()
 app.use(cors())
@@ -83,11 +89,17 @@ const q = {
   ),
 
   // Выпечка
-  bakingAll: db.prepare('SELECT * FROM baking_item ORDER BY id'),
+  bakingAll: db.prepare('SELECT * FROM baking_item'),
   bakingByTitle: db.prepare('SELECT * FROM baking_item WHERE title = ?'),
-  bakingInsert: db.prepare('INSERT INTO baking_item (title, qty, price) VALUES (?,?,?)'),
+  bakingInsert: db.prepare(
+    'INSERT INTO baking_item (title, qty, price, qty_date) VALUES (?,?,?,?)'
+  ),
   bakingUpdate: db.prepare(
-    "UPDATE baking_item SET qty = ?, price = ?, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE baking_item SET qty = ?, price = ?, qty_date = ?, updated_at = datetime('now') WHERE id = ?"
+  ),
+  // Обнуляем количество у позиций, опубликованных не сегодня (по UTC)
+  bakingResetQty: db.prepare(
+    'UPDATE baking_item SET qty = 0, qty_date = ? WHERE qty_date IS NULL OR qty_date <> ?'
   ),
 
   // Отчёт посещаемости за месяц
@@ -334,14 +346,32 @@ app.get('/api/attendance/today', auth(), (req, res) => {
 })
 
 // ── Выпечка ─────────────────────────────────────────────────────────────────
+// Количество живёт одни сутки: в 00:00 UTC оно сбрасывается в 0, цена остаётся.
+// Сброс ленивый — перед каждой отдачей данных, без отдельного таймера.
+function todayUtc() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function resetBakingQty() {
+  const day = todayUtc()
+  q.bakingResetQty.run(day, day)
+}
+
+// Алфавитный порядок задаём в JS: у SQLite нет русской коллации
+function bakingItems() {
+  return q.bakingAll.all().sort((a, b) => a.title.localeCompare(b.title, 'ru'))
+}
+
 app.get('/api/baking', auth(), (_req, res) => {
-  res.json({ items: q.bakingAll.all() })
+  resetBakingQty()
+  res.json({ items: bakingItems() })
 })
 
 // Публикация работником: [{ title, qty, price }] — количество и цена
 // обновляются, новая позиция создаётся; фото подвешивается позже полем image
 app.put('/api/baking', auth(), onlyStaff, (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : []
+  const day = todayUtc()
   db.exec('BEGIN')
   try {
     for (const item of items) {
@@ -350,15 +380,15 @@ app.put('/api/baking', auth(), onlyStaff, (req, res) => {
       const price = Math.max(0, Math.round(Number(item?.price) || 0))
       if (!title) continue
       const existing = q.bakingByTitle.get(title)
-      if (existing) q.bakingUpdate.run(qty, price, existing.id)
-      else q.bakingInsert.run(title, qty, price)
+      if (existing) q.bakingUpdate.run(qty, price, day, existing.id)
+      else q.bakingInsert.run(title, qty, price, day)
     }
     db.exec('COMMIT')
   } catch (err) {
     db.exec('ROLLBACK')
     return res.status(400).json({ error: `Не удалось опубликовать: ${err.message}` })
   }
-  res.json({ items: q.bakingAll.all() })
+  res.json({ items: bakingItems() })
 })
 
 // ── Отчёт посещаемости для бухгалтерии ──────────────────────────────────────

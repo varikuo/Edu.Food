@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Download } from 'lucide-react'
+import { Check, ChevronDown, Download, EyeOff } from 'lucide-react'
 import { getAttendanceReport } from '../lib/api'
 
 const SLOT_TITLES = { breakfast: 'Завтрак', lunch: 'Обед', dinner: 'Ужин' }
@@ -14,10 +14,14 @@ const SLOTS = ['breakfast', 'lunch', 'dinner']
 // Отчёт для бухгалтерии: кто кушал, а кто пропустил, по каждому приёму пищи.
 // Пропуски отдаются списком дат по каждому приёму (дд.мм) — на экране и в CSV.
 // Выгрузка CSV (Excel) — по классам, для отправки классным руководителям.
+// Класс выбирается кнопкой «Выбрать класс»: таблица видна только для него,
+// пункт «Скрыть» в списке убирает таблицу с экрана.
 export default function Attendance() {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [report, setReport] = useState(null)
   const [error, setError] = useState('')
+  const [picked, setPicked] = useState(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -37,6 +41,11 @@ export default function Attendance() {
     return dates.length > 0 ? dates.map(isoToRu).join(', ') : '—'
   }
 
+  const classes = report?.classes ?? []
+  // Выбранный класс может пропасть после смены месяца — тогда отчёт скрыт
+  const active = classes.some((c) => c.class === picked) ? picked : null
+  const visible = active ? classes.filter((c) => c.class === active) : []
+
   const downloadCsv = () => {
     const header = [
       'Класс',
@@ -45,7 +54,7 @@ export default function Attendance() {
       ...SLOTS.map((s) => `${SLOT_TITLES[s]}: даты пропусков`)
     ]
     const lines = [header.join(';')]
-    for (const cls of report.classes) {
+    for (const cls of visible) {
       for (const row of cls.rows) {
         const cells = [cls.class, row.fio]
         for (const slot of SLOTS) {
@@ -64,7 +73,7 @@ export default function Attendance() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `посещаемость_${month}.csv`
+    a.download = `посещаемость_${active}_${month}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -83,7 +92,7 @@ export default function Attendance() {
           onChange={(e) => e.target.value && setMonth(e.target.value)}
           className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[14px] text-neutral-900 outline-none focus:border-[#E89B2D]"
         />
-        {report && (
+        {report && active && (
           <button
             type="button"
             onClick={downloadCsv}
@@ -103,7 +112,64 @@ export default function Attendance() {
         </p>
       )}
 
-      {(report?.classes ?? []).map((cls) => (
+      {/* Выбор класса: отчёт показывается только для выбранного класса */}
+      {report && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setPickerOpen((open) => !open)}
+            aria-expanded={pickerOpen}
+            className="flex w-full items-center justify-between rounded-2xl bg-[#F5F5F5] px-4 py-3 text-[15px] font-medium text-neutral-900 active:bg-neutral-200"
+          >
+            <span>{active ? `${active} класс` : 'Выбрать класс'}</span>
+            <ChevronDown
+              size={18}
+              strokeWidth={2.2}
+              className={`shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {pickerOpen && (
+            <div className="mt-2 overflow-hidden rounded-2xl bg-white shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+              {classes.map((cls, i) => (
+                <button
+                  key={cls.class}
+                  type="button"
+                  onClick={() => {
+                    setPicked(cls.class)
+                    setPickerOpen(false)
+                  }}
+                  className={`flex w-full items-center justify-between px-4 py-3 text-left text-[15px] text-neutral-900 active:bg-neutral-100 ${
+                    i > 0 ? 'border-t border-neutral-100' : ''
+                  }`}
+                >
+                  {cls.class} класс
+                  {active === cls.class && (
+                    <Check size={16} strokeWidth={2.4} style={{ color: '#E89B2D' }} />
+                  )}
+                </button>
+              ))}
+
+              {/* Скрыть таблицу выбранного класса */}
+              {active && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPicked(null)
+                    setPickerOpen(false)
+                  }}
+                  className="flex w-full items-center justify-between border-t border-neutral-100 px-4 py-3 text-left text-[15px] text-neutral-500 active:bg-neutral-100"
+                >
+                  Скрыть
+                  <EyeOff size={16} strokeWidth={2.2} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {visible.map((cls) => (
         <section key={cls.class} className="mt-6">
           <h2 className="text-[17px] font-semibold text-neutral-900">{cls.class} класс</h2>
           <div className="mt-2 overflow-x-auto rounded-2xl bg-[#F5F5F5]">
@@ -164,8 +230,7 @@ export default function Attendance() {
 
       <p className="mt-4 mb-2 text-[12px] text-neutral-400">
         В ячейке — сколько приёмов посетил из числа учебных дней (пн–сб), ниже — число пропусков.
-        Пропуск — учебный день без отметки по QR и без отказа. Даты пропусков за месяц, для каждого
-        приёма пищи отдельно, в формате дд.мм.
+        Пропуск — учебный день без отметки по QR и без отказа.
       </p>
     </div>
   )

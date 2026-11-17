@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Check, Plus } from 'lucide-react'
+import { Check, Plus, Search } from 'lucide-react'
 import { getBaking, publishBaking } from '../lib/api'
 
 const ACCENT = '#E89B2D'
 
+// Алфавитный порядок по названию — как в справочнике столовой
+const byTitle = (a, b) => a.title.localeCompare(b.title, 'ru')
+
 // Публикация выпечки: работник задаёт количество штук и актуальную цену.
+// Список идёт по алфавиту, над ним — поиск по названию.
 // Новую позицию можно добавить; фото подвешивается позже полем image.
 export default function BakingPublish() {
   const [items, setItems] = useState(null)
   const [newTitle, setNewTitle] = useState('')
+  const [query, setQuery] = useState('')
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -18,7 +23,9 @@ export default function BakingPublish() {
     getBaking()
       .then((data) => {
         if (!alive) return
-        setItems(data.items.map((i) => ({ title: i.title, qty: i.qty, price: i.price })))
+        setItems(
+          data.items.map((i) => ({ title: i.title, qty: i.qty, price: i.price })).sort(byTitle)
+        )
         setStatus('ready')
       })
       .catch((err) => {
@@ -48,7 +55,7 @@ export default function BakingPublish() {
       return
     }
     setSaved(false)
-    setItems((list) => [...list, { title, qty: 0, price: 0 }])
+    setItems((list) => [...list, { title, qty: 0, price: 0 }].sort(byTitle))
     setNewTitle('')
   }
 
@@ -56,7 +63,9 @@ export default function BakingPublish() {
     setStatus('saving')
     try {
       const { items: fresh } = await publishBaking(items)
-      setItems(fresh.map((i) => ({ title: i.title, qty: i.qty, price: i.price })))
+      setItems(
+        fresh.map((i) => ({ title: i.title, qty: i.qty, price: i.price })).sort(byTitle)
+      )
       setStatus('ready')
       setSaved(true)
     } catch (err) {
@@ -64,6 +73,12 @@ export default function BakingPublish() {
       setStatus('error')
     }
   }
+
+  // Поиск фильтрует уже видимые строки, исходный индекс нужен для setField
+  const needle = query.trim().toLowerCase()
+  const rows = (items ?? [])
+    .map((item, i) => ({ item, i }))
+    .filter(({ item }) => !needle || item.title.toLowerCase().includes(needle))
 
   return (
     <div className="px-5 pt-8">
@@ -73,12 +88,53 @@ export default function BakingPublish() {
       <p className="mt-1.5 text-sm text-neutral-400">
         Укажите количество штук и цену — ученики увидят это на вкладке «Выпечка»
       </p>
+      <p className="mt-1 text-[12px] text-neutral-400">
+        Количество сбрасывается в 0 каждые сутки в 00:00 UTC, цена сохраняется
+      </p>
 
       {error && <p className="mt-4 text-[13px] font-medium text-red-500">{error}</p>}
       {status === 'loading' && <p className="mt-6 text-sm text-neutral-400">Загрузка…</p>}
 
-      <div className="mt-4 space-y-2.5">
-        {(items ?? []).map((item, i) => (
+      {/* Поиск по названию — просто фильтр списка, без раскрывающихся меню */}
+      {items && (
+        <div className="relative mt-4">
+          <Search
+            size={16}
+            strokeWidth={2.2}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск по названию"
+            className="w-full rounded-2xl bg-[#F5F5F5] py-3 pl-9 pr-3 text-[14px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:ring-1 focus:ring-[#E89B2D]"
+          />
+        </div>
+      )}
+
+      {/* Новая позиция — сразу под поиском, чтобы список оставался внизу */}
+      {items && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addItem()}
+            placeholder="Новая позиция, например Ватрушка"
+            className="min-w-0 flex-1 rounded-2xl bg-[#F5F5F5] px-4 py-3 text-[14px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:ring-1 focus:ring-[#E89B2D]"
+          />
+          <button
+            type="button"
+            onClick={addItem}
+            aria-label="Добавить позицию"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm active:bg-neutral-100"
+          >
+            <Plus size={18} strokeWidth={2.2} style={{ color: ACCENT }} />
+          </button>
+        </div>
+      )}
+
+      <div className="mt-3 space-y-2.5">
+        {rows.map(({ item, i }) => (
           <div key={item.title} className="flex items-center gap-2 rounded-2xl bg-[#F5F5F5] p-3">
             <span className="min-w-0 flex-1 truncate text-[15px] text-neutral-900">
               {item.title}
@@ -103,27 +159,11 @@ export default function BakingPublish() {
             <span className="w-4 text-[13px] text-neutral-400">₽</span>
           </div>
         ))}
-      </div>
 
-      {items && (
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addItem()}
-            placeholder="Новая позиция, например Ватрушка"
-            className="min-w-0 flex-1 rounded-2xl bg-[#F5F5F5] px-4 py-3 text-[14px] text-neutral-900 outline-none placeholder:text-neutral-400"
-          />
-          <button
-            type="button"
-            onClick={addItem}
-            aria-label="Добавить позицию"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm active:bg-neutral-100"
-          >
-            <Plus size={18} strokeWidth={2.2} style={{ color: ACCENT }} />
-          </button>
-        </div>
-      )}
+        {items && rows.length === 0 && (
+          <p className="text-[13px] text-neutral-400">Ничего не найдено</p>
+        )}
+      </div>
 
       {items && (
         <button

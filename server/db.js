@@ -101,13 +101,16 @@ db.exec(`
     PRIMARY KEY (date, slot, dish_id)
   );
 
-  -- Выпечка на продажу: количество штук и актуальная цена, фото позже полем image
+  -- Выпечка на продажу: количество штук и актуальная цена, фото позже полем image.
+  -- qty_date — сутки (UTC), на которые задано количество: в 00:00 UTC оно
+  -- сбрасывается в 0, а цена остаётся до следующей публикации
   CREATE TABLE IF NOT EXISTS baking_item (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     title      TEXT NOT NULL UNIQUE,
     image      TEXT,
     qty        INTEGER NOT NULL DEFAULT 0,
     price      INTEGER NOT NULL DEFAULT 0,
+    qty_date   TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `)
@@ -116,6 +119,9 @@ db.exec(`
 const bakingCols = db.prepare('PRAGMA table_info(baking_item)').all().map((c) => c.name)
 if (!bakingCols.includes('price')) {
   db.exec('ALTER TABLE baking_item ADD COLUMN price INTEGER NOT NULL DEFAULT 0')
+}
+if (!bakingCols.includes('qty_date')) {
+  db.exec('ALTER TABLE baking_item ADD COLUMN qty_date TEXT')
 }
 
 // ── Время «как в столовой» ──────────────────────────────────────────────────
