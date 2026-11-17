@@ -1,16 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import bcrypt from 'bcryptjs'
-import { db, today } from './db.js'
+import { dataDir, db, today } from './db.js'
 import { buildAccounts } from './students.js'
 
 // ── Демо-данные ─────────────────────────────────────────────────────────────
 // Запуск: npm run seed — полный сброс и заполнение заново.
 // Ученики и параллели — в server/students.js; пароли детерминированы от ФИО,
 // поэтому повторный сид не меняет уже розданные логины/пароли.
-
-const root = path.dirname(fileURLToPath(import.meta.url))
 
 // Фото блюд лежат в public/menu и скачаны из Wikimedia Commons
 // под свободными лицензиями (источники — scripts/download-dish-photos.mjs)
@@ -165,7 +163,7 @@ export function seed({ log = console.log } = {}) {
   }
 
   // ── Файл для раздачи классным руководителям ─────────────────────────────
-  const csvPath = path.join(root, 'data', 'logins.csv')
+  const csvPath = path.join(dataDir, 'logins.csv')
   // BOM + разделитель ; — CSV открывается в Excel без плясок с кодировкой
   fs.writeFileSync(csvPath, '\uFEFF' + csvLines.join('\r\n') + '\r\n', 'utf8')
 

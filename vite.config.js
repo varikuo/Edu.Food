@@ -18,7 +18,9 @@ export default defineConfig(({ mode }) => {
   const https = mode === 'https'
 
   return {
-    base: './', // для GitHub Pages: относительные пути вместо корневых
+    // Абсолютный base: приложение отдаётся одним сервером с корня домена,
+    // поэтому /assets/... резолвится одинаково и на главной, и на любом пути.
+    base: '/',
     plugins: https && !hasLocalCert ? [react(), basicSsl()] : [react()],
     server: {
       host: true,

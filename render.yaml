@@ -1,0 +1,30 @@
+# Деплой на Render: один веб-сервис отдаёт и API, и собранный фронт.
+# Секрет подписи токенов Render генерирует сам (generateValue),
+# база живёт на постоянном диске, иначе она теряется при каждом перезапуске.
+services:
+  - type: web
+    name: edufood
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_DIR
+        value: /var/data
+      # Часовой пояс столовой: дедлайн выбора и «сегодня» считаются от него
+      - key: TZ_OFFSET_MIN
+        value: "540"
+      - key: CHOICE_DEADLINE
+        value: "08:15"
+      - key: CHOICE_ENFORCE_DEADLINE
+        value: "true"
+    disk:
+      name: edufood-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.gitignore
+.certs
+.vscode
+*.log
+
+# Локальная база и выданные логины не должны попадать в образ:
+# в проде данные лежат в томе DATA_DIR
+server/data

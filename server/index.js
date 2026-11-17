@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import express from 'express'
 import cors from 'cors'
 import bcrypt from 'bcryptjs'
@@ -5,6 +8,7 @@ import jwt from 'jsonwebtoken'
 import {
   CHOICE_DEADLINE,
   ENFORCE_DEADLINE,
+  IS_PROD,
   JWT_SECRET,
   PORT,
   SLOTS,
@@ -26,8 +30,24 @@ backfillDishImages()
 backfillBakingImages()
 
 const app = express()
-app.use(cors())
+
+// За прокси хостинга (Render, Fly, nginx) реальный IP приходит в X-Forwarded-For
+app.set('trust proxy', 1)
+
+// CORS нужен только если фронт живёт на другом домене (CORS_ORIGIN=a.ru,b.ru).
+// По умолчанию фронт и API отдаёт один и тот же процесс — обмен same-origin.
+const corsOrigins = (process.env.CORS_ORIGIN ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+if (corsOrigins.length > 0) app.use(cors({ origin: corsOrigins }))
+
 app.use(express.json())
+
+// В проде секрет подписи обязан быть своим: иначе токены подделываются
+if (IS_PROD && !process.env.JWT_SECRET) {
+  console.warn('[api] JWT_SECRET не задан — используется значение по умолчанию из кода!')
+}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const MONTH_RE = /^\d{4}-\d{2}$/
@@ -482,6 +502,48 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
+// Неизвестный /api/* — честный 404 JSON, а не HTML-страница фронта
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Не найдено' })
+})
+
+// ── Собранный фронт ─────────────────────────────────────────────────────────
+// В проде один процесс отдаёт и API, и dist: телефону достаточно одного адреса,
+// а относительные /api-запросы работают без CORS.
+const root = path.dirname(fileURLToPath(import.meta.url))
+const distDir = path.resolve(root, '..', 'dist')
+const indexHtml = path.join(distDir, 'index.html')
+const hasBuild = fs.existsSync(indexHtml)
+
+if (hasBuild) {
+  app.use(
+    express.static(distDir, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        // У файлов из assets/ в имени есть хеш — их можно кешировать навсегда.
+        // Остальное (фото блюд, иконки) меняется без смены имени — короче.
+        const hashed = filePath.includes(`${path.sep}assets${path.sep}`)
+        res.setHeader(
+          'Cache-Control',
+          hashed ? 'public, max-age=31536000, immutable' : 'public, max-age=3600'
+        )
+      }
+    })
+  )
+
+  // Любой GET вне /api — это SPA: отдаём index.html, чтобы работали deep links.
+  // Запрос файла с расширением (например, пропавшей картинки) — честный 404,
+  // иначе браузер получил бы HTML вместо изображения.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+    const ext = path.extname(req.path)
+    if (ext && ext !== '.html') return res.status(404).end()
+    return res.sendFile(indexHtml)
+  })
+} else if (IS_PROD) {
+  console.warn('[api] dist не найден — фронт не раздаётся, сначала выполните npm run build')
+}
+
 app.use((err, _req, res, _next) => {
   console.error('[api]', err)
   res.status(500).json({ error: 'Внутренняя ошибка сервера' })
@@ -490,6 +552,7 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, () => {
   const control = ENFORCE_DEADLINE ? '' : ', контроль времени выключен'
   console.log(`[api] http://localhost:${PORT}`)
+  console.log(`[api] фронт: ${hasBuild ? distDir : 'не собран (npm run build)'}`)
   console.log(
     `[api] база порций: ${portionsBase()} (ученики в базе), дедлайн ${CHOICE_DEADLINE}${control}`
   )

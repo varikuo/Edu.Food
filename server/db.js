@@ -3,11 +3,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 
-// Встроенный в Node (>=22.5) драйвер SQLite: не нужно ничего компилировать,
-// база лежит в одном файле server/data/mealqr.db и копируется вместе с проектом.
+// Встроенный в Node (>=24) драйвер SQLite: не нужно ничего компилировать,
+// база лежит в одном файле и копируется вместе с проектом.
+// DATA_DIR переопределяет папку с данными — на хостинге туда монтируют том.
 
 const root = path.dirname(fileURLToPath(import.meta.url))
-const dataDir = path.join(root, 'data')
+export const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(root, 'data')
 fs.mkdirSync(dataDir, { recursive: true })
 
 export const SLOTS = ['breakfast', 'lunch', 'dinner']
@@ -34,6 +37,8 @@ export const ENFORCE_DEADLINE = process.env.CHOICE_ENFORCE_DEADLINE === 'true'
 
 export const JWT_SECRET = process.env.JWT_SECRET ?? 'mealqr-dev-secret'
 export const PORT = Number(process.env.PORT ?? 8787)
+// Прод включается NODE_ENV=production: тогда секрет и CORS обязаны быть заданы
+export const IS_PROD = process.env.NODE_ENV === 'production'
 
 export const db = new DatabaseSync(path.join(dataDir, 'mealqr.db'))
 

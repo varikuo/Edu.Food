@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "vite",
     "api": "node server/index.js",
+    "start": "node server/index.js",
     "seed": "node server/seed.js",
     "qr": "node scripts/generate-qr.mjs",
     "dev:all": "concurrently -n api,web -c yellow,green \"node server/index.js\" \"vite --mode https\"",
