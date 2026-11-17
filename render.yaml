@@ -1,11 +1,16 @@
 # Деплой на Render: один веб-сервис отдаёт и API, и собранный фронт.
-# Секрет подписи токенов Render генерирует сам (generateValue),
-# база живёт на постоянном диске, иначе она теряется при каждом перезапуске.
+# Секрет подписи токенов Render генерирует сам (generateValue).
+#
+# Тариф бесплатный, поэтому постоянного диска нет: база лежит во временной
+# папке и пересоздаётся сидом при каждом деплое и после простоя. Для демо это
+# безопасно — логины и пароли учеников детерминированы от ФИО, поэтому после
+# пересоздания базы они те же (файл выдаётся заново в /tmp/edufood/logins.csv).
+# С постоянными данными: plan: starter + диск на /var/data.
 services:
   - type: web
     name: edufood
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: npm ci && npm run build
     startCommand: npm start
@@ -16,7 +21,10 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: DATA_DIR
-        value: /var/data
+        value: /tmp/edufood
+      # node:sqlite появился в Node 24 — фиксируем версию, иначе Render возьмёт старую
+      - key: NIXPACKS_NODE_VERSION
+        value: "24"
       # Часовой пояс столовой: дедлайн выбора и «сегодня» считаются от него
       - key: TZ_OFFSET_MIN
         value: "540"
@@ -24,7 +32,3 @@ services:
         value: "08:15"
       - key: CHOICE_ENFORCE_DEADLINE
         value: "true"
-    disk:
-      name: edufood-data
-      mountPath: /var/data
-      sizeGB: 1
